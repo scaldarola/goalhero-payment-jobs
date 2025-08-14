@@ -60,3 +60,40 @@ jobs:
       run: |
         echo "✅ All tests passed on main branch!"
         echo "🚀 Application is ready for deployment."
+        
+    - name: Notify Slack on Success
+      if: success()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        channel: '#deployments'
+        text: |
+          :white_check_mark: *GoalHero Payment Jobs - Tests Passed*
+          
+          *Branch:* `${{ github.ref_name }}`
+          *Commit:* `${{ github.sha }}`
+          *Author:* ${{ github.actor }}
+          
+          All tests passed successfully! :rocket:
+          
+          <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        
+    - name: Notify Slack on Failure
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#alerts'
+        text: |
+          :x: *GoalHero Payment Jobs - Tests Failed*
+          
+          *Branch:* `${{ github.ref_name }}`
+          *Commit:* `${{ github.sha }}`
+          *Author:* ${{ github.actor }}
+          *Workflow:* ${{ github.workflow }}
+          
+          Tests failed on main branch! Please check immediately.
+          
+          <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}

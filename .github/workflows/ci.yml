@@ -287,3 +287,106 @@ jobs:
         echo "- Dependencies: Up to date" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "The application is ready for deployment! 🎉" >> $GITHUB_STEP_SUMMARY
+        
+  # Job 8: Slack notifications
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [test, lint, security, build, deploy-check]
+    if: always()
+    
+    steps:
+    - name: Notify Slack on Success
+      if: ${{ needs.test.result == 'success' && needs.lint.result == 'success' && needs.security.result == 'success' && needs.build.result == 'success' }}
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        channel: '#deployments'
+        text: |
+          :white_check_mark: *GoalHero Payment Jobs - CI Pipeline Passed*
+          
+          *Branch:* `${{ github.ref_name }}`
+          *Commit:* `${{ github.sha }}`
+          *Author:* ${{ github.actor }}
+          
+          :test_tube: Tests: Passed
+          :mag: Lint: Passed  
+          :shield: Security: Passed
+          :hammer: Build: Passed
+          
+          All checks passed! Ready for deployment :rocket:
+          
+          <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Pipeline>
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        
+    - name: Notify Slack on Test Failure
+      if: ${{ needs.test.result == 'failure' }}
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#alerts'
+        text: |
+          :x: *GoalHero Payment Jobs - Tests Failed*
+          
+          *Branch:* `${{ github.ref_name }}`
+          *Commit:* `${{ github.sha }}`
+          *Author:* ${{ github.actor }}
+          
+          :test_tube: **Tests failed!** Please check the logs immediately.
+          
+          <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Failed Tests>
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        
+    - name: Notify Slack on Lint Failure  
+      if: ${{ needs.lint.result == 'failure' }}
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#code-quality'
+        text: |
+          :warning: *GoalHero Payment Jobs - Linting Issues*
+          
+          *Branch:* `${{ github.ref_name }}`
+          *Commit:* `${{ github.sha }}`
+          *Author:* ${{ github.actor }}
+          
+          :mag: **Linting failed!** Code quality issues detected.
+          
+          <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Fix Linting Issues>
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        
+    - name: Notify Slack on Security Failure
+      if: ${{ needs.security.result == 'failure' }}
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#security-alerts'
+        text: |
+          :rotating_light: *GoalHero Payment Jobs - Security Issues Detected*
+          
+          *Branch:* `${{ github.ref_name }}`
+          *Commit:* `${{ github.sha }}`
+          *Author:* ${{ github.actor }}
+          
+          :shield: **Security scan failed!** Potential vulnerabilities found.
+          
+          <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Review Security Issues>
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        
+    - name: Notify Slack on Build Failure
+      if: ${{ needs.build.result == 'failure' }}
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#build-alerts'
+        text: |
+          :hammer_and_wrench: *GoalHero Payment Jobs - Build Failed*
+          
+          *Branch:* `${{ github.ref_name }}`
+          *Commit:* `${{ github.sha }}`
+          *Author:* ${{ github.actor }}
+          
+          :hammer: **Build failed!** Application cannot compile.
+          
+          <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Fix Build Issues>
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
