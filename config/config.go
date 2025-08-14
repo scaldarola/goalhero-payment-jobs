@@ -1,12 +1,24 @@
 package config
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
 	"time"
 
+	"cloud.google.com/go/firestore"
+	"firebase.google.com/go/v4"
+	"google.golang.org/api/option"
 )
+
+type Config struct {
+	PaymentTestMode    bool
+	StripeTestMode     bool
+	AutoAcceptPayments bool
+	Port               string
+	Environment        string
+}
 
 // JobsConfig holds configuration specific to jobs service
 type JobsConfig struct {
@@ -22,12 +34,53 @@ type JobsConfig struct {
 	RetryDelay               time.Duration
 }
 
-var jobsConfig *JobsConfig
+var (
+	AppConfig *Config
+	jobsConfig *JobsConfig
+	firestoreClient *firestore.Client
+)
+
+func InitConfig() {
+	AppConfig = &Config{
+		PaymentTestMode:    getBoolEnv("PAYMENT_TEST_MODE", true),
+		StripeTestMode:     getBoolEnv("STRIPE_TEST_MODE", true),
+		AutoAcceptPayments: getBoolEnv("AUTO_ACCEPT_PAYMENTS", true),
+		Port:              getEnv("PORT", "8080"),
+		Environment:       getEnv("ENVIRONMENT", "development"),
+	}
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getBoolEnv(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if parsed, err := strconv.ParseBool(value); err == nil {
+			return parsed
+		}
+	}
+	return defaultValue
+}
+
+func IsTestMode() bool {
+	return AppConfig.PaymentTestMode || AppConfig.Environment == "development"
+}
+
+func IsAutoAcceptEnabled() bool {
+	return AppConfig.AutoAcceptPayments && IsTestMode()
+}
 
 // InitJobsConfig initializes the jobs service configuration
 func InitJobsConfig() {
 	// Initialize base config first
 	InitConfig()
+	
+	// Initialize Firestore
+	InitFirestore()
 	
 	jobsConfig = &JobsConfig{
 		Port:                      getEnv("JOBS_PORT", "8081"),
@@ -53,14 +106,27 @@ func GetJobsConfig() *JobsConfig {
 	return jobsConfig
 }
 
-// Helper functions
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+// InitFirestore initializes Firestore client
+func InitFirestore() {
+	ctx := context.Background()
+	opt := option.WithCredentialsFile("auth/firebase_credentials.json")
+	
+	app, err := firebase.NewApp(ctx, nil, opt)
+	if err != nil {
+		log.Fatalf("Error initializing Firebase app: %v", err)
 	}
-	return defaultValue
+	
+	client, err := app.Firestore(ctx)
+	if err != nil {
+		log.Fatalf("Error initializing Firestore: %v", err)
+	}
+	
+	firestoreClient = client
+	SetFirestoreClient(client)
+	log.Println("✅ Firestore initialized")
 }
 
+// Helper functions for jobs config
 func getIntEnv(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
@@ -87,3 +153,4 @@ func getDurationEnv(key string, defaultValue time.Duration) time.Duration {
 	}
 	return defaultValue
 }
+

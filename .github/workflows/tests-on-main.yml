@@ -1,0 +1,62 @@
+name: Tests on Main
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run All Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Install dependencies
+      run: go mod download
+      
+    - name: Run tests
+      run: |
+        echo "🧪 Running tests..."
+        go test -v ./...
+      env:
+        GO_ENV: test
+        
+    - name: Test with race detection
+      run: |
+        echo "🏃 Running tests with race detection..."
+        go test -race ./...
+      env:
+        GO_ENV: test
+        
+    - name: Generate test coverage
+      run: |
+        echo "📊 Generating test coverage..."
+        go test -coverprofile=coverage.out ./...
+        go tool cover -func=coverage.out | grep "total:" | awk '{print "Total coverage: " $3}'
+      env:
+        GO_ENV: test
+        
+    - name: Build application
+      run: |
+        echo "🔨 Building application..."
+        go build -v ./...
+        
+    - name: Notify success
+      run: |
+        echo "✅ All tests passed on main branch!"
+        echo "🚀 Application is ready for deployment."

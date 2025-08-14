@@ -1,0 +1,289 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: '1.23'
+
+jobs:
+  # Job 1: Run tests
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Verify dependencies
+      run: go mod verify
+      
+    - name: Run tests
+      run: go test -v -coverprofile=coverage.out ./...
+      env:
+        GO_ENV: test
+        
+    - name: Generate coverage report
+      run: go tool cover -html=coverage.out -o coverage.html
+      
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        
+    - name: Upload coverage artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: coverage.html
+
+  # Job 2: Lint code
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        args: --timeout=5m --config=.golangci.yml
+
+  # Job 3: Security scan
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Run Gosec Security Scanner
+      uses: securecodewarrior/github-action-gosec@master
+      with:
+        args: '-fmt sarif -out gosec.sarif ./...'
+        
+    - name: Upload Gosec results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: gosec.sarif
+
+  # Job 4: Build application
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        binary_name="goalhero-payment-jobs-${{ matrix.goos }}-${{ matrix.goarch }}"
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          binary_name="${binary_name}.exe"
+        fi
+        go build -ldflags="-s -w" -o "$binary_name" .
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: goalhero-payment-jobs-*
+
+  # Job 5: Docker build (if Dockerfile exists)
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [test, lint, security]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+      
+    - name: Cache Docker layers
+      uses: actions/cache@v3
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+          
+    - name: Build Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: false
+        tags: goalhero-payment-jobs:latest
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+        
+    - name: Move cache
+      run: |
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  # Job 6: Integration tests (if we had integration test files)
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    
+    services:
+      # Add services like databases, Redis, etc. if needed for integration tests
+      # postgres:
+      #   image: postgres:13
+      #   env:
+      #     POSTGRES_PASSWORD: postgres
+      #   options: >-
+      #     --health-cmd pg_isready
+      #     --health-interval 10s
+      #     --health-timeout 5s
+      #     --health-retries 5
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Run integration tests
+      run: |
+        # Run integration tests if they exist
+        # go test -tags=integration ./...
+        echo "Integration tests would run here"
+      env:
+        GO_ENV: integration
+
+  # Job 7: Deployment readiness check
+  deploy-check:
+    name: Deployment Check
+    runs-on: ubuntu-latest
+    needs: [test, lint, security, build]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+      
+    - name: Verify all required files exist
+      run: |
+        echo "Checking for required deployment files..."
+        
+        # Check for Go files
+        if [ ! -f "main.go" ]; then
+          echo "❌ main.go not found"
+          exit 1
+        fi
+        
+        # Check for config files
+        if [ ! -f "go.mod" ]; then
+          echo "❌ go.mod not found"
+          exit 1
+        fi
+        
+        # Check for Firebase credentials placeholder
+        if [ ! -d "auth" ]; then
+          echo "❌ auth directory not found"
+          exit 1
+        fi
+        
+        echo "✅ All required files found"
+        
+    - name: Validate Go mod
+      run: |
+        go mod tidy
+        if [ -n "$(git status --porcelain go.mod go.sum)" ]; then
+          echo "❌ go.mod/go.sum files need to be updated"
+          git status --porcelain go.mod go.sum
+          exit 1
+        fi
+        echo "✅ Go modules are up to date"
+        
+    - name: Check for sensitive data
+      run: |
+        echo "Checking for sensitive data..."
+        
+        # Check for common sensitive patterns (basic check)
+        if grep -r "password.*=" . --exclude-dir=.git --exclude-dir=node_modules || \
+           grep -r "secret.*=" . --exclude-dir=.git --exclude-dir=node_modules || \
+           grep -r "api[_-]key" . --exclude-dir=.git --exclude-dir=node_modules; then
+          echo "❌ Potential sensitive data found. Please review."
+          exit 1
+        fi
+        
+        echo "✅ No obvious sensitive data found"
+        
+    - name: Generate deployment summary
+      run: |
+        echo "## 🚀 Deployment Ready!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### ✅ All checks passed:" >> $GITHUB_STEP_SUMMARY
+        echo "- Tests: Passed" >> $GITHUB_STEP_SUMMARY
+        echo "- Linting: Passed" >> $GITHUB_STEP_SUMMARY  
+        echo "- Security: Passed" >> $GITHUB_STEP_SUMMARY
+        echo "- Build: Passed" >> $GITHUB_STEP_SUMMARY
+        echo "- Dependencies: Up to date" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "The application is ready for deployment! 🎉" >> $GITHUB_STEP_SUMMARY

@@ -4,57 +4,48 @@ import (
 	"time"
 )
 
-// MatchStatus represents the current status of a match
-type MatchStatus string
+type Location struct {
+	PlaceId   string  `json:"placeId"`
+	Name      string  `json:"name"`
+	Address   string  `json:"address"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
 
-const (
-	MatchStatusPending   MatchStatus = "pending"
-	MatchStatusConfirmed MatchStatus = "confirmed"
-	MatchStatusCompleted MatchStatus = "completed"
-	MatchStatusCancelled MatchStatus = "cancelled"
-)
+// AcceptedPlayer represents a player who has been accepted to a match
+type AcceptedPlayer struct {
+	PlayerID      string    `json:"playerId"`
+	ApplicationID string    `json:"applicationId"`
+	AcceptedAt    time.Time `json:"acceptedAt"`
+}
 
-// Match represents a football match
 type Match struct {
-	ID               string            `json:"id" firestore:"id"`
-	Title            string            `json:"title" firestore:"title"`
-	Description      string            `json:"description" firestore:"description"`
-	Location         string            `json:"location" firestore:"location"`
-	ScheduledAt      time.Time         `json:"scheduledAt" firestore:"scheduledAt"`
-	Duration         int               `json:"duration" firestore:"duration"` // in minutes
-	CreatedBy        string            `json:"createdBy" firestore:"createdBy"`
-	MaxPlayers       int               `json:"maxPlayers" firestore:"maxPlayers"`
-	MinPlayers       int               `json:"minPlayers" firestore:"minPlayers"`
-	CurrentPlayers   int               `json:"currentPlayers" firestore:"currentPlayers"`
-	Status           MatchStatus       `json:"status" firestore:"status"`
-	PlayersPresent   []string          `json:"playersPresent" firestore:"playersPresent"`
-	PlayersAbsent    []string          `json:"playersAbsent" firestore:"playersAbsent"`
-	Ratings          map[string]Rating `json:"ratings" firestore:"ratings"`
-	PricePerPlayer   float64           `json:"pricePerPlayer" firestore:"pricePerPlayer"`
-	TotalPrice       float64           `json:"totalPrice" firestore:"totalPrice"`
-	CreatedAt        time.Time         `json:"createdAt" firestore:"createdAt"`
-	UpdatedAt        time.Time         `json:"updatedAt" firestore:"updatedAt"`
-	CompletedAt      *time.Time        `json:"completedAt,omitempty" firestore:"completedAt,omitempty"`
-	PaymentStatus    PaymentStatus     `json:"paymentStatus" firestore:"paymentStatus"`
-	EscrowAccountID  string            `json:"escrowAccountId,omitempty" firestore:"escrowAccountId,omitempty"`
+	ID              string            `json:"id"`
+	DateTime        time.Time         `json:"dateTime"`
+	Zone            string            `json:"zone"`
+	Level           string            `json:"level"`
+	Comment         string            `json:"comment,omitempty"`
+	CreatedAt       time.Time         `json:"createdAt"`
+	UpdatedAt       time.Time         `json:"updatedAt,omitempty"`
+	Format          string            `json:"format"`                   // 8v8, 5v5, etc.
+	MaxSpots        int               `json:"maxSpots"`                 // Máximo de jugadores
+	SpotsTaken      int               `json:"spotsTaken"`               // Jugadores que ya se unieron
+	Recorded        bool              `json:"recorded"`                 // Si el partido fue grabado
+	CreatedBy       string            `json:"createdBy"`                // UID del creador del partido
+	Status          string            `json:"status"`                   // open, player_selected, full, completed, cancelled
+	Location        *Location         `json:"location,omitempty"`       // Ubicación del partido
+	Applications    []*Application    `json:"applications,omitempty"`   // Aplicaciones de jugadores
+	AcceptedPlayers []AcceptedPlayer  `json:"acceptedPlayers,omitempty"` // Jugadores aceptados
+	CompletedAt     *time.Time        `json:"completedAt,omitempty" firestore:"completedAt,omitempty"` // When match was completed
+	CompletionNotes string            `json:"completionNotes,omitempty" firestore:"completionNotes,omitempty"` // Notes from completion
+	PlayersPresent  []string          `json:"playersPresent,omitempty" firestore:"playersPresent,omitempty"` // Players who attended
 }
 
-// Rating represents a player's rating for a match
-type Rating struct {
-	PlayerID    string    `json:"playerId" firestore:"playerId"`
-	RatedBy     string    `json:"ratedBy" firestore:"ratedBy"`
-	Score       float64   `json:"score" firestore:"score"`       // 1-5 stars
-	Comment     string    `json:"comment" firestore:"comment"`
-	CreatedAt   time.Time `json:"createdAt" firestore:"createdAt"`
-}
-
-// PaymentStatus represents the payment status of a match
-type PaymentStatus string
-
+// Match status constants
 const (
-	PaymentStatusPending    PaymentStatus = "pending"
-	PaymentStatusEscrowed   PaymentStatus = "escrowed"
-	PaymentStatusReleased   PaymentStatus = "released"
-	PaymentStatusDisputed   PaymentStatus = "disputed"
-	PaymentStatusRefunded   PaymentStatus = "refunded"
+	MatchStatusOpen           = "open"
+	MatchStatusPlayerSelected = "player_selected"
+	MatchStatusFull           = "full"
+	MatchStatusCompleted      = "completed"
+	MatchStatusCancelled      = "cancelled"
 )

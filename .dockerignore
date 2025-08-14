@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+README.md
+
+# CI/CD
+.github/
+
+# Development files
+*.md
+.env
+.env.*
+
+# Test files
+*_test.go
+coverage.out
+coverage.html
+
+# Build artifacts
+goalhero-payment-jobs-*
+*.exe
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
