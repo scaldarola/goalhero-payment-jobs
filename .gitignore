@@ -1,0 +1,36 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Firebase credentials (should be set via environment variables in production)
+auth/firebase_credentials.json
+
+# Vercel
+.vercel
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
