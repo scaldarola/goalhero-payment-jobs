@@ -357,7 +357,7 @@ func (jm *BackgroundJobManager) runRatingReminder() {
 	oneDayAgo := time.Now().Add(-24 * time.Hour)
 
 	query := firestoreClient.Collection("matches").
-		Where("status", "==", models.MatchStatusCompleted).
+		Where("status", "==", "completed").
 		Where("completedAt", ">=", sevenDaysAgo).
 		Where("completedAt", "<=", oneDayAgo)
 

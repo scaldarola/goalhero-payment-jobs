@@ -14,10 +14,5 @@
   ],
   "env": {
     "GO_ENV": "production"
-  },
-  "functions": {
-    "main.go": {
-      "includeFiles": "**"
-    }
   }
 }

@@ -21,9 +21,9 @@ This service handles critical background operations including:
 Required environment variables for production deployment:
 
 ```bash
-# Firebase/Google Cloud
-GOOGLE_APPLICATION_CREDENTIALS=<base64-encoded-service-account-key>
-GOOGLE_CLOUD_PROJECT=your-project-id
+# Firebase/Google Cloud (Required for Vercel)
+GOOGLE_APPLICATION_CREDENTIALS=<firebase-service-account-json-as-string>
+GOOGLE_CLOUD_PROJECT=your-firebase-project-id
 
 # Application Configuration
 GO_ENV=production
@@ -40,6 +40,13 @@ RATING_DEADLINE_DAYS=7
 MIN_RATING_FOR_AUTO_RELEASE=3.0
 DISPUTE_ESCALATION_HOURS=72
 ```
+
+### Setting up Firebase Credentials for Vercel
+
+1. Download your Firebase service account JSON key
+2. Convert it to a single-line string (remove newlines)
+3. Set `GOOGLE_APPLICATION_CREDENTIALS` to this JSON string in Vercel dashboard
+4. Set `GOOGLE_CLOUD_PROJECT` to your Firebase project ID
 
 ## API Endpoints
 

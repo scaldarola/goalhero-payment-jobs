@@ -4,21 +4,15 @@ import (
 	"cloud.google.com/go/firestore"
 )
 
-// GetFirestoreClient returns the initialized Firestore client
-// This is set by handlers during initialization to avoid circular imports
-var GetFirestoreClient func() *firestore.Client
+// Global Firestore client reference
+var globalFirestoreClient *firestore.Client
 
-// SetFirestoreClient allows handlers to set the client reference
+// SetFirestoreClient allows setting the global client reference
 func SetFirestoreClient(client *firestore.Client) {
-	GetFirestoreClient = func() *firestore.Client {
-		return client
-	}
+	globalFirestoreClient = client
 }
 
-// FirestoreClient is a convenience accessor
+// FirestoreClient returns the global Firestore client
 func FirestoreClient() *firestore.Client {
-	if GetFirestoreClient != nil {
-		return GetFirestoreClient()
-	}
-	return nil
+	return globalFirestoreClient
 }

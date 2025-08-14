@@ -109,16 +109,32 @@ func GetJobsConfig() *JobsConfig {
 // InitFirestore initializes Firestore client
 func InitFirestore() {
 	ctx := context.Background()
-	opt := option.WithCredentialsFile("auth/firebase_credentials.json")
+	
+	var opt option.ClientOption
+	
+	// Check for environment variable first (for Vercel/production)
+	if credentialsJSON := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); credentialsJSON != "" {
+		opt = option.WithCredentialsJSON([]byte(credentialsJSON))
+	} else {
+		// Fallback to file for local development
+		credentialsPath := "auth/firebase_credentials.json"
+		if _, err := os.Stat(credentialsPath); os.IsNotExist(err) {
+			log.Printf("⚠️ No Firebase credentials found, Firestore will be disabled")
+			return
+		}
+		opt = option.WithCredentialsFile(credentialsPath)
+	}
 	
 	app, err := firebase.NewApp(ctx, nil, opt)
 	if err != nil {
-		log.Fatalf("Error initializing Firebase app: %v", err)
+		log.Printf("⚠️ Error initializing Firebase app: %v", err)
+		return
 	}
 	
 	client, err := app.Firestore(ctx)
 	if err != nil {
-		log.Fatalf("Error initializing Firestore: %v", err)
+		log.Printf("⚠️ Error initializing Firestore: %v", err)
+		return
 	}
 	
 	firestoreClient = client
