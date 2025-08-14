@@ -26,10 +26,7 @@ This repository is configured to send Slack notifications when tests fail or suc
 The workflows are configured to post to different channels based on the type of notification:
 
 - `#deployments` - Success notifications
-- `#alerts` - Test failures and critical issues  
-- `#code-quality` - Linting issues
-- `#security-alerts` - Security scan failures
-- `#build-alerts` - Build failures
+- `#alerts` - Test and build failures
 
 **Create these channels in your Slack workspace or modify the channel names in the workflow files.**
 
@@ -38,16 +35,12 @@ The workflows are configured to post to different channels based on the type of 
 ### ✅ Success Notifications
 Sent to `#deployments` when:
 - All tests pass
-- Build succeeds  
-- Linting passes
-- Security scans pass
+- Build succeeds
 
 ### ❌ Failure Notifications
-Sent to appropriate channels when:
-- **Tests fail** → `#alerts` 
-- **Linting fails** → `#code-quality`
-- **Security issues** → `#security-alerts`
-- **Build fails** → `#build-alerts`
+Sent to `#alerts` when:
+- **Tests fail**
+- **Build fails**
 
 ## 🎨 Message Format
 
@@ -55,14 +48,14 @@ Success messages include:
 - ✅ Status indicator
 - 📝 Branch and commit info
 - 👤 Author information
-- 📊 Summary of passed checks
+- 📊 Summary of passed checks (Tests, Build)
 - 🔗 Link to view pipeline details
 
 Failure messages include:
 - ❌ Failure indicator
 - 📝 Branch and commit info  
 - 👤 Author information
-- 🔍 Specific failure type
+- 🔍 Specific failure type (Tests or Build)
 - 🔗 Direct link to logs
 
 ## 🔧 Customizing Notifications

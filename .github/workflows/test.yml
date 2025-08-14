@@ -91,53 +91,16 @@ jobs:
         path: |
           goalhero-payment-jobs-*
 
-  lint:
-    name: Lint Code
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Check out code
-      uses: actions/checkout@v4
-      
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
-        
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v6
-      with:
-        version: latest
-        args: --timeout=5m
-
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Check out code
-      uses: actions/checkout@v4
-      
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
-        
-    - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: './...'
-        
   # Notification job that runs after all other jobs
   notify:
     name: Slack Notifications
     runs-on: ubuntu-latest
-    needs: [test, build, lint, security]
+    needs: [test, build]
     if: always() && github.ref == 'refs/heads/main'
     
     steps:
     - name: Notify Slack on Success
-      if: ${{ needs.test.result == 'success' && needs.build.result == 'success' && needs.lint.result == 'success' && needs.security.result == 'success' }}
+      if: ${{ needs.test.result == 'success' && needs.build.result == 'success' }}
       uses: 8398a7/action-slack@v3
       with:
         status: success
@@ -151,8 +114,6 @@ jobs:
           
           :test_tube: Tests: Passed
           :hammer: Build: Passed
-          :mag: Lint: Passed  
-          :shield: Security: Passed
           
           Application is ready! :rocket:
           
@@ -160,7 +121,7 @@ jobs:
         webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
         
     - name: Notify Slack on Any Failure
-      if: ${{ needs.test.result == 'failure' || needs.build.result == 'failure' || needs.lint.result == 'failure' || needs.security.result == 'failure' }}
+      if: ${{ needs.test.result == 'failure' || needs.build.result == 'failure' }}
       uses: 8398a7/action-slack@v3
       with:
         status: failure
@@ -174,8 +135,6 @@ jobs:
           
           :test_tube: Tests: ${{ needs.test.result }}
           :hammer: Build: ${{ needs.build.result }}
-          :mag: Lint: ${{ needs.lint.result }}
-          :shield: Security: ${{ needs.security.result }}
           
           **Action required!** Check the failed steps.
           

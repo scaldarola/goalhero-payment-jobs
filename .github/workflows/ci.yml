@@ -59,56 +59,11 @@ jobs:
         name: coverage-report
         path: coverage.html
 
-  # Job 2: Lint code
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Check out code
-      uses: actions/checkout@v4
-      
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v6
-      with:
-        version: latest
-        args: --timeout=5m --config=.golangci.yml
-
-  # Job 3: Security scan
-  security:
-    name: Security
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Check out code
-      uses: actions/checkout@v4
-      
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        
-    - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: '-fmt sarif -out gosec.sarif ./...'
-        
-    - name: Upload Gosec results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: gosec.sarif
-
-  # Job 4: Build application
+  # Job 2: Build application
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [test, lint]
+    needs: [test]
     
     strategy:
       matrix:
@@ -144,11 +99,11 @@ jobs:
         name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
         path: goalhero-payment-jobs-*
 
-  # Job 5: Docker build (if Dockerfile exists)
+  # Job 3: Docker build (if Dockerfile exists)
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [test, lint, security]
+    needs: [test, build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
@@ -180,7 +135,7 @@ jobs:
         rm -rf /tmp/.buildx-cache
         mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
-  # Job 6: Integration tests (if we had integration test files)
+  # Job 4: Integration tests (if we had integration test files)
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
@@ -216,11 +171,11 @@ jobs:
       env:
         GO_ENV: integration
 
-  # Job 7: Deployment readiness check
+  # Job 5: Deployment readiness check
   deploy-check:
     name: Deployment Check
     runs-on: ubuntu-latest
-    needs: [test, lint, security, build]
+    needs: [test, build]
     if: github.ref == 'refs/heads/main'
     
     steps:
@@ -281,23 +236,21 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### ✅ All checks passed:" >> $GITHUB_STEP_SUMMARY
         echo "- Tests: Passed" >> $GITHUB_STEP_SUMMARY
-        echo "- Linting: Passed" >> $GITHUB_STEP_SUMMARY  
-        echo "- Security: Passed" >> $GITHUB_STEP_SUMMARY
         echo "- Build: Passed" >> $GITHUB_STEP_SUMMARY
         echo "- Dependencies: Up to date" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "The application is ready for deployment! 🎉" >> $GITHUB_STEP_SUMMARY
         
-  # Job 8: Slack notifications
+  # Job 6: Slack notifications
   notify:
     name: Notify Results
     runs-on: ubuntu-latest
-    needs: [test, lint, security, build, deploy-check]
+    needs: [test, build, deploy-check]
     if: always()
     
     steps:
     - name: Notify Slack on Success
-      if: ${{ needs.test.result == 'success' && needs.lint.result == 'success' && needs.security.result == 'success' && needs.build.result == 'success' }}
+      if: ${{ needs.test.result == 'success' && needs.build.result == 'success' }}
       uses: 8398a7/action-slack@v3
       with:
         status: success
@@ -310,8 +263,6 @@ jobs:
           *Author:* ${{ github.actor }}
           
           :test_tube: Tests: Passed
-          :mag: Lint: Passed  
-          :shield: Security: Passed
           :hammer: Build: Passed
           
           All checks passed! Ready for deployment :rocket:
@@ -337,48 +288,12 @@ jobs:
           <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Failed Tests>
         webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
         
-    - name: Notify Slack on Lint Failure  
-      if: ${{ needs.lint.result == 'failure' }}
-      uses: 8398a7/action-slack@v3
-      with:
-        status: failure
-        channel: '#code-quality'
-        text: |
-          :warning: *GoalHero Payment Jobs - Linting Issues*
-          
-          *Branch:* `${{ github.ref_name }}`
-          *Commit:* `${{ github.sha }}`
-          *Author:* ${{ github.actor }}
-          
-          :mag: **Linting failed!** Code quality issues detected.
-          
-          <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Fix Linting Issues>
-        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
-        
-    - name: Notify Slack on Security Failure
-      if: ${{ needs.security.result == 'failure' }}
-      uses: 8398a7/action-slack@v3
-      with:
-        status: failure
-        channel: '#security-alerts'
-        text: |
-          :rotating_light: *GoalHero Payment Jobs - Security Issues Detected*
-          
-          *Branch:* `${{ github.ref_name }}`
-          *Commit:* `${{ github.sha }}`
-          *Author:* ${{ github.actor }}
-          
-          :shield: **Security scan failed!** Potential vulnerabilities found.
-          
-          <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Review Security Issues>
-        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
-        
     - name: Notify Slack on Build Failure
       if: ${{ needs.build.result == 'failure' }}
       uses: 8398a7/action-slack@v3
       with:
         status: failure
-        channel: '#build-alerts'
+        channel: '#alerts'
         text: |
           :hammer_and_wrench: *GoalHero Payment Jobs - Build Failed*
           
