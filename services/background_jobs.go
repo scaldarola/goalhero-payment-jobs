@@ -335,7 +335,6 @@ func (jm *BackgroundJobManager) runRatingReminder() {
 	}
 	statusMutex.Unlock()
 
-	ctx := context.Background()
 	var result string
 	var hasError bool
 
@@ -343,11 +342,21 @@ func (jm *BackgroundJobManager) runRatingReminder() {
 		updateJobStatus("rating_reminder", result, time.Since(start), hasError)
 	}()
 
+	// Check if Firestore client is available
+	firestoreClient := config.FirestoreClient()
+	if firestoreClient == nil {
+		log.Printf("[RatingReminderJob] Firestore client not available (test environment?)")
+		result = "Skipped - no Firestore client available"
+		return
+	}
+
+	ctx := context.Background()
+	
 	// Implementation from original background_jobs.go
 	sevenDaysAgo := time.Now().AddDate(0, 0, -jm.config.RatingDeadlineDays)
 	oneDayAgo := time.Now().Add(-24 * time.Hour)
 
-	query := config.FirestoreClient().Collection("matches").
+	query := firestoreClient.Collection("matches").
 		Where("status", "==", models.MatchStatusCompleted).
 		Where("completedAt", ">=", sevenDaysAgo).
 		Where("completedAt", "<=", oneDayAgo)
@@ -410,6 +419,14 @@ func (jm *BackgroundJobManager) runAutoRelease() {
 		updateJobStatus("auto_release", result, time.Since(start), hasError)
 	}()
 
+	// Check if Firestore client is available
+	firestoreClient := config.FirestoreClient()
+	if firestoreClient == nil {
+		log.Printf("[AutoReleaseJob] Firestore client not available (test environment?)")
+		result = "Skipped - no Firestore client available"
+		return
+	}
+
 	// TODO: Implement or call the ProcessAutomaticReleases function
 	// For now, simulate the result
 	result = "Auto release job completed (implementation needed)"
@@ -432,6 +449,14 @@ func (jm *BackgroundJobManager) runDisputeEscalation() {
 	defer func() {
 		updateJobStatus("dispute_escalation", result, time.Since(start), hasError)
 	}()
+
+	// Check if Firestore client is available
+	firestoreClient := config.FirestoreClient()
+	if firestoreClient == nil {
+		log.Printf("[DisputeEscalationJob] Firestore client not available (test environment?)")
+		result = "Skipped - no Firestore client available"
+		return
+	}
 
 	// TODO: Implement dispute escalation logic
 	// For now, simulate the result
