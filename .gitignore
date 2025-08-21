@@ -12,6 +12,8 @@ main
 # Output of the go coverage tool
 *.out
 
+.env.*
+
 # Go workspace file
 go.work
 
