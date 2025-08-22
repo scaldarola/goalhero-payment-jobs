@@ -180,6 +180,7 @@ func (s *PaymentService) ProcessEscrowRelease(escrowID, releaseReason string) er
 	}
 
 	log.Printf("[PaymentService] Escrow released successfully: %s", escrowID)
+	s.sendSlackSuccessNotification(escrowID, escrow.Amount, releaseReason)
 	return nil
 }
 
@@ -280,9 +281,11 @@ func (s *PaymentService) ProcessAutomaticReleases() (int, int, []string, error) 
 				errorMsg := fmt.Sprintf("Escrow %s: %v", escrow.ID, err)
 				errors = append(errors, errorMsg)
 				log.Printf("[PaymentService] Failed to auto-release escrow %s: %v", escrow.ID, err)
+				s.sendSlackFailureNotification(escrow.ID, escrow.Amount, err.Error())
 			} else {
 				processed++
 				log.Printf("[PaymentService] Auto-released escrow: %s", escrow.ID)
+				s.sendSlackSuccessNotification(escrow.ID, escrow.Amount, "automatic_release")
 			}
 		} else {
 			// Update status to pending_rating if not eligible for auto-release
@@ -498,4 +501,57 @@ func (s *PaymentService) sendSlackAlert(escrowID string, rating float64, minRati
 	}
 
 	log.Printf("[PaymentService] Slack alert sent for escrow %s", escrowID)
+}
+
+// sendSlackSuccessNotification sends a success notification to Slack for processed escrow payments
+func (s *PaymentService) sendSlackSuccessNotification(escrowID string, amount float64, releaseReason string) {
+	webhookURL := os.Getenv("SLACK_ESCROW_WEBHOOK_URL")
+	if webhookURL == "" {
+		return
+	}
+
+	message := SlackMessage{
+		Text: fmt.Sprintf("✅ *Escrow Payment Processed Successfully*\n\nEscrow ID: %s\nAmount: €%.2f\nReason: %s\nStatus: Released",
+			escrowID, amount, releaseReason),
+	}
+
+	s.sendSlackMessage(message, webhookURL)
+}
+
+// sendSlackFailureNotification sends a failure notification to Slack for failed escrow payments
+func (s *PaymentService) sendSlackFailureNotification(escrowID string, amount float64, errorMsg string) {
+	webhookURL := os.Getenv("SLACK_ESCROW_WEBHOOK_URL")
+	if webhookURL == "" {
+		return
+	}
+
+	message := SlackMessage{
+		Text: fmt.Sprintf("❌ *Escrow Payment Processing Failed*\n\nEscrow ID: %s\nAmount: €%.2f\nError: %s\nStatus: Failed",
+			escrowID, amount, errorMsg),
+	}
+
+	s.sendSlackMessage(message, webhookURL)
+}
+
+// sendSlackMessage sends a message to Slack webhook
+func (s *PaymentService) sendSlackMessage(message SlackMessage, webhookURL string) {
+	jsonData, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("[PaymentService] Failed to marshal Slack message: %v", err)
+		return
+	}
+
+	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("[PaymentService] Failed to send Slack message: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[PaymentService] Slack message failed with status: %d", resp.StatusCode)
+		return
+	}
+
+	log.Printf("[PaymentService] Slack notification sent for escrow processing")
 }
