@@ -1,6 +1,7 @@
-package handler
+package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -20,12 +21,13 @@ func init() {
 
 	// Initialize configuration
 	config.InitJobsConfig()
-	
+
 	// Initialize Firebase
 	auth.InitFirebase()
 
 	// Start background job manager (will be handled differently in serverless)
 	if os.Getenv("GO_ENV") != "production" {
+		fmt.Print("⚙️ Starting background jobs in non-production environment...\n")
 		jobManager = services.StartBackgroundJobs()
 	}
 
@@ -50,7 +52,7 @@ func init() {
 		// Job status and monitoring
 		api.GET("/status", handlers.GetJobStatuses)
 		api.GET("/health", handlers.GetJobHealth)
-		
+
 		// Job control (admin only)
 		adminApi := api.Group("")
 		adminApi.Use(auth.FirebaseAuthMiddleware())
@@ -65,7 +67,7 @@ func init() {
 		internal := api.Group("/internal")
 		{
 			internal.POST("/trigger-rating-reminder", handlers.TriggerRatingReminder)
-			internal.POST("/trigger-auto-release", handlers.TriggerAutoRelease) 
+			internal.POST("/trigger-auto-release", handlers.TriggerAutoRelease)
 			internal.POST("/trigger-dispute-escalation", handlers.TriggerDisputeEscalation)
 		}
 	}
@@ -75,10 +77,10 @@ func init() {
 
 func main() {
 	// For local development
-	if os.Getenv("GO_ENV") != "production" {
-		log.Println("🔧 Running in development mode on :8081")
-		router.Run(":8081")
-	}
+	//if os.Getenv("GO_ENV") != "production" {
+	log.Println("🔧 Running in development mode on :8081")
+	router.Run(":8081")
+	//}
 }
 
 // Handler for Vercel - this is the entry point for serverless functions
