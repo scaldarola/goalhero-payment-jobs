@@ -66,6 +66,10 @@ func (s *StripeConnectService) CalculateFees(amount float64) (platformFee, strip
 
 // CreateEscrowPaymentIntent creates a payment intent with funds held in escrow
 func (s *StripeConnectService) CreateEscrowPaymentIntent(payment *models.Payment, organizerID string) (*PaymentResult, error) {
+	if payment == nil {
+		return nil, fmt.Errorf("payment cannot be nil")
+	}
+	
 	log.Printf("[StripeConnect] Creating escrow payment intent for €%.2f", payment.Amount)
 
 	// Calculate fees

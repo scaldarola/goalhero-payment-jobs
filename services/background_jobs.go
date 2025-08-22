@@ -427,9 +427,31 @@ func (jm *BackgroundJobManager) runAutoRelease() {
 		return
 	}
 
-	// TODO: Implement or call the ProcessAutomaticReleases function
-	// For now, simulate the result
-	result = "Auto release job completed (implementation needed)"
+	// Process automatic escrow releases
+	paymentService := NewPaymentService()
+	processed, failed, errors, err := paymentService.ProcessAutomaticReleases()
+	
+	if err != nil {
+		hasError = true
+		result = fmt.Sprintf("Auto release failed: %v", err)
+		log.Printf("[AutoReleaseJob] Failed: %s", result)
+		return
+	}
+
+	if failed > 0 {
+		hasError = true
+		result = fmt.Sprintf("Processed %d releases, %d failed (errors: %d)", processed, failed, len(errors))
+		// Log the first few errors for debugging
+		for i, errMsg := range errors {
+			if i >= 3 { // Limit to first 3 errors in logs
+				break
+			}
+			log.Printf("[AutoReleaseJob] Error: %s", errMsg)
+		}
+	} else {
+		result = fmt.Sprintf("Successfully processed %d automatic releases", processed)
+	}
+
 	log.Printf("[AutoReleaseJob] Completed: %s (runtime: %v)", result, time.Since(start))
 }
 

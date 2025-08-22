@@ -1,9 +1,13 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,7 +39,7 @@ func (s *PaymentService) CreateGamePayment(userID, gameID, applicationID, organi
 
 	// Calculate fees
 	platformFee, stripeFee, netAmount := s.stripeService.CalculateFees(amount)
-	
+
 	// Create payment record
 	payment := &models.Payment{
 		ID:            uuid.NewString(),
@@ -98,23 +102,23 @@ func (s *PaymentService) ConfirmGamePayment(paymentID string) (*models.Payment, 
 	// Update payment status
 	now := time.Now()
 	payment.ConfirmedAt = &now
-	
+
 	if result.Status == "succeeded" {
 		payment.Status = models.PaymentStatusConfirmed
-		
+
 		// Create escrow transaction
 		escrow := &models.EscrowTransaction{
-			ID:                  uuid.NewString(),
-			GameID:              payment.GameID,
-			OrganizerID:         payment.Metadata["organizerID"].(string),
-			PaymentID:           payment.ID,
-			Amount:              payment.NetAmount,
-			Status:              models.EscrowStatusHeld,
-			HeldAt:              now,
-			ReleaseEligibleAt:   now.Add(time.Duration(models.EscrowHoldHours) * time.Hour),
-			RatingReceived:      false,
-			RatingApproved:      false,
-			MinRatingRequired:   3.0, // Minimum rating for auto-release
+			ID:                uuid.NewString(),
+			GameID:            payment.GameID,
+			OrganizerID:       payment.Metadata["organizerID"].(string),
+			PaymentID:         payment.ID,
+			Amount:            payment.NetAmount,
+			Status:            models.EscrowStatusHeld,
+			HeldAt:            now,
+			ReleaseEligibleAt: now.Add(time.Duration(models.EscrowHoldHours) * time.Hour),
+			RatingReceived:    false,
+			RatingApproved:    false,
+			MinRatingRequired: 3.0, // Minimum rating for auto-release
 		}
 
 		// Save escrow transaction
@@ -135,11 +139,11 @@ func (s *PaymentService) ConfirmGamePayment(paymentID string) (*models.Payment, 
 		if result.PaymentIntent.LastPaymentError != nil {
 			payment.FailureReason = result.PaymentIntent.LastPaymentError.Msg
 		}
-		
+
 		if err := s.updatePayment(payment); err != nil {
 			log.Printf("[PaymentService] Failed to update payment: %v", err)
 		}
-		
+
 		log.Printf("[PaymentService] Payment failed: %s", payment.ID)
 		return payment, nil, fmt.Errorf("payment failed: %s", payment.FailureReason)
 	}
@@ -253,16 +257,122 @@ func (s *PaymentService) GetEligibleEscrowReleases() ([]*models.EscrowTransactio
 	return escrows, nil
 }
 
+// ProcessAutomaticReleases processes all eligible escrow releases automatically
+func (s *PaymentService) ProcessAutomaticReleases() (int, int, []string, error) {
+	log.Printf("[PaymentService] Processing automatic escrow releases")
+
+	// Get eligible escrow transactions
+	escrows, err := s.GetEligibleEscrowReleases()
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("failed to get eligible escrow releases: %w", err)
+	}
+
+	processed := 0
+	failed := 0
+	var errors []string
+
+	for _, escrow := range escrows {
+		// Check if escrow meets auto-release criteria
+		if s.isEligibleForAutoRelease(escrow) {
+			err := s.ProcessEscrowRelease(escrow.ID, "automatic_release")
+			if err != nil {
+				failed++
+				errorMsg := fmt.Sprintf("Escrow %s: %v", escrow.ID, err)
+				errors = append(errors, errorMsg)
+				log.Printf("[PaymentService] Failed to auto-release escrow %s: %v", escrow.ID, err)
+			} else {
+				processed++
+				log.Printf("[PaymentService] Auto-released escrow: %s", escrow.ID)
+			}
+		} else {
+			// Update status to pending_rating if not eligible for auto-release
+			escrow.Status = models.EscrowStatusPendingRating
+			if err := s.updateEscrowTransaction(escrow); err != nil {
+				log.Printf("[PaymentService] Failed to update escrow status: %v", err)
+			}
+		}
+	}
+
+	log.Printf("[PaymentService] Auto-release completed: %d processed, %d failed out of %d eligible",
+		processed, failed, len(escrows))
+	return processed, failed, errors, nil
+}
+
+// isEligibleForAutoRelease checks if an escrow transaction is eligible for automatic release
+func (s *PaymentService) isEligibleForAutoRelease(escrow *models.EscrowTransaction) bool {
+	// Must be past release eligible time
+	if time.Now().Before(escrow.ReleaseEligibleAt) {
+		return false
+	}
+
+	// Must not be disputed
+	if escrow.Status == models.EscrowStatusDisputed {
+		return false
+	}
+
+	// If rating received, check if it meets minimum threshold
+	if escrow.RatingReceived {
+		if escrow.ActualRating >= escrow.MinRatingRequired {
+			escrow.RatingApproved = true
+			return true
+		} else {
+			// Poor rating - requires manual review - this should send an alert to slack using an environment variable called SLACK_ESCROW_WEBHOOK_URL
+			s.sendSlackAlert(escrow.ID, escrow.ActualRating, escrow.MinRatingRequired)
+			return false
+		}
+	}
+
+	// No rating after deadline - check business rules
+	// For now, allow auto-release if no rating after 24h grace period
+	graceDeadline := escrow.ReleaseEligibleAt.Add(24 * time.Hour)
+	if time.Now().After(graceDeadline) {
+		log.Printf("[PaymentService] Auto-releasing escrow %s due to no rating after grace period", escrow.ID)
+		return true
+	}
+
+	return false
+}
+
+// UpdateEscrowRating updates the rating for an escrow transaction
+func (s *PaymentService) UpdateEscrowRating(escrowID string, rating float64, reviewerID string) error {
+	log.Printf("[PaymentService] Updating escrow rating: %s, Rating: %.1f", escrowID, rating)
+
+	escrow, err := s.getEscrowTransaction(escrowID)
+	if err != nil {
+		return fmt.Errorf("failed to get escrow transaction: %w", err)
+	}
+
+	escrow.RatingReceived = true
+	escrow.ActualRating = rating
+	escrow.ReviewedBy = reviewerID
+
+	// Determine if rating meets minimum threshold
+	if rating >= escrow.MinRatingRequired {
+		escrow.RatingApproved = true
+		escrow.Status = models.EscrowStatusApproved
+	} else {
+		escrow.RatingApproved = false
+		// Poor rating - keep in held status for manual review
+	}
+
+	if err := s.updateEscrowTransaction(escrow); err != nil {
+		return fmt.Errorf("failed to update escrow transaction: %w", err)
+	}
+
+	log.Printf("[PaymentService] Escrow rating updated: %s (Approved: %v)", escrowID, escrow.RatingApproved)
+	return nil
+}
+
 // validatePaymentAmount validates payment amount against business rules
 func (s *PaymentService) validatePaymentAmount(amount float64) error {
 	if amount < models.MinimumGamePrice {
 		return fmt.Errorf("minimum payment amount is €%.2f", models.MinimumGamePrice)
 	}
-	
+
 	if amount > models.MaximumGamePrice {
 		return fmt.Errorf("maximum payment amount is €%.2f", models.MaximumGamePrice)
 	}
-	
+
 	return nil
 }
 
@@ -349,4 +459,43 @@ func (s *PaymentService) getEscrowTransaction(escrowID string) (*models.EscrowTr
 	}
 
 	return &escrow, nil
+}
+
+// SlackMessage represents a Slack webhook message
+type SlackMessage struct {
+	Text string `json:"text"`
+}
+
+// sendSlackAlert sends an alert to Slack for manual review
+func (s *PaymentService) sendSlackAlert(escrowID string, rating float64, minRating float64) {
+	webhookURL := os.Getenv("SLACK_ESCROW_WEBHOOK_URL")
+	if webhookURL == "" {
+		log.Printf("[PaymentService] SLACK_ESCROW_WEBHOOK_URL not configured, skipping Slack alert")
+		return
+	}
+
+	message := SlackMessage{
+		Text: fmt.Sprintf("🚨 *Escrow Manual Review Required*\n\nEscrow ID: %s\nActual Rating: %.1f\nMinimum Required: %.1f\n\nThis escrow requires manual review due to poor rating.",
+			escrowID, rating, minRating),
+	}
+
+	jsonData, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("[PaymentService] Failed to marshal Slack message: %v", err)
+		return
+	}
+
+	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("[PaymentService] Failed to send Slack alert: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[PaymentService] Slack alert failed with status: %d", resp.StatusCode)
+		return
+	}
+
+	log.Printf("[PaymentService] Slack alert sent for escrow %s", escrowID)
 }

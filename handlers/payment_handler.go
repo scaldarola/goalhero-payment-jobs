@@ -295,3 +295,45 @@ func (h *PaymentHandler) GetTestCards(c *gin.Context) {
 		"note":       "These are test card numbers for Stripe testing",
 	})
 }
+
+// UpdateEscrowRatingRequest represents the request to update escrow rating
+type UpdateEscrowRatingRequest struct {
+	EscrowID   string  `json:"escrowId" binding:"required"`
+	Rating     float64 `json:"rating" binding:"required,min=1,max=5"`
+	ReviewerID string  `json:"reviewerId" binding:"required"`
+}
+
+// UpdateEscrowRating handles POST /api/payments/escrow/rating
+func (h *PaymentHandler) UpdateEscrowRating(c *gin.Context) {
+	var req UpdateEscrowRatingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[PaymentHandler] Invalid request: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	log.Printf("[PaymentHandler] Updating escrow rating: %s, Rating: %.1f", req.EscrowID, req.Rating)
+
+	err := h.paymentService.UpdateEscrowRating(req.EscrowID, req.Rating, req.ReviewerID)
+	if err != nil {
+		log.Printf("[PaymentHandler] Failed to update escrow rating: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update escrow rating",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"message":    "Escrow rating updated successfully",
+		"escrowId":   req.EscrowID,
+		"rating":     req.Rating,
+		"reviewerId": req.ReviewerID,
+	})
+}
