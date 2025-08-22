@@ -1,124 +1,257 @@
 # GoalHero Payment Jobs Service
 
-Background jobs service for managing payments, escrow, ratings, and automated processes for the GoalHero platform. Designed to run on Vercel as a serverless application.
+A microservice for handling payment processing, escrow management, and background jobs for the GoalHero sports platform.
 
-## Overview
+## 🎯 Purpose
 
-This service handles critical background operations including:
-- **Rating Reminders**: Automated reminders for players to rate completed matches
-- **Auto Release**: Automatic release of escrowed payments when conditions are met
-- **Dispute Escalation**: Escalation of payment disputes requiring admin intervention
+GoalHero is a sports platform where organizers create games and players apply to join with competitive bids. This service manages the entire payment lifecycle from initial payment creation to final payout, with built-in escrow functionality to ensure fair transactions.
 
-## Architecture
+## 🏗️ Architecture
 
-- **Serverless First**: Built for Vercel deployment with proper Handler function
-- **Firebase Integration**: Uses Firebase Auth and Firestore for data persistence
-- **Job Management**: Background jobs with status tracking and health monitoring
-- **RESTful API**: Endpoints for job control and monitoring
+### Core Components
 
-## Environment Variables
+- **Payment Processing**: Stripe Connect integration with escrow functionality
+- **Background Jobs**: Automated rating reminders, escrow releases, and dispute handling  
+- **REST API**: Endpoints for payment operations and job management
+- **Firebase Integration**: Authentication and Firestore database
+- **Serverless Ready**: Designed for Vercel deployment with local development support
 
-Required environment variables for production deployment:
+### Tech Stack
 
-```bash
-# Firebase/Google Cloud (Required for Vercel)
-GOOGLE_APPLICATION_CREDENTIALS=<firebase-service-account-json-as-string>
-GOOGLE_CLOUD_PROJECT=your-firebase-project-id
+- **Language**: Go 1.21+
+- **Web Framework**: Gin HTTP router
+- **Database**: Firebase Firestore
+- **Payment Provider**: Stripe Connect
+- **Authentication**: Firebase Auth
+- **Deployment**: Vercel (serverless) + local development
 
-# Application Configuration
-GO_ENV=production
-MAIN_API_URL=https://your-main-api-url.com
-JWT_SECRET=your-jwt-secret
+## 💰 Business Model
 
-# Job Intervals (optional, uses defaults if not set)
-RATING_REMINDER_INTERVAL=24h
-AUTO_RELEASE_INTERVAL=1h
-DISPUTE_ESCALATION_INTERVAL=24h
+### Payment Flow
+1. **Players apply** to games with bid amounts (€5-50)
+2. **Organizers select** preferred players
+3. **Payments processed** through Stripe with escrow
+4. **Funds held** until game completion + rating
+5. **Automatic release** to organizers based on performance ratings
 
-# Job Configuration (optional)
-RATING_DEADLINE_DAYS=7
-MIN_RATING_FOR_AUTO_RELEASE=3.0
-DISPUTE_ESCALATION_HOURS=72
-```
+### Fee Structure
+- **Platform Fee**: 4% of game amount
+- **Stripe Fee**: 1.65% + €0.25 per transaction
+- **Total Cost**: Game amount + Stripe processing fee
+- **Organizer Nets**: Game amount - platform fee (after escrow release)
 
-### Setting up Firebase Credentials for Vercel
+## 🚀 Quick Start
 
-1. Download your Firebase service account JSON key
-2. Convert it to a single-line string (remove newlines)
-3. Set `GOOGLE_APPLICATION_CREDENTIALS` to this JSON string in Vercel dashboard
-4. Set `GOOGLE_CLOUD_PROJECT` to your Firebase project ID
+### Prerequisites
+- Go 1.21 or higher
+- Stripe test account with Connect enabled
+- Firebase project with Firestore enabled
 
-## API Endpoints
+### Environment Setup
+1. Copy environment template:
+   ```bash
+   cp .env.example .env
+   ```
 
-### Health & Status
-- `GET /` - Service health check
-- `GET /ping` - Simple ping endpoint
-- `GET /api/jobs/status` - Detailed job statuses
-- `GET /api/jobs/health` - Job health information
+2. Configure your environment variables:
+   ```bash
+   # Stripe Configuration
+   STRIPE_SECRET_KEY=sk_test_your_key_here
+   STRIPE_CONNECT_ACCOUNT=acct_test_your_connect_account
+   STRIPE_TEST_MODE=true
+   
+   # Firebase Configuration  
+   GOOGLE_APPLICATION_CREDENTIALS=path/to/firebase-service-account.json
+   FIREBASE_PROJECT_ID=your-project-id
+   
+   # Server Configuration
+   PORT=8081
+   GO_ENV=development
+   ```
 
-### Job Control (Admin Only - Requires Firebase Auth)
-- `POST /api/jobs/trigger/:jobName` - Manually trigger a job
-- `GET /api/jobs/config` - Get current job configuration
-- `POST /api/jobs/config` - Update job configuration
-- `POST /api/jobs/restart` - Restart job system
-
-### Internal Service Communication
-- `POST /api/jobs/internal/trigger-rating-reminder` - Trigger rating reminders
-- `POST /api/jobs/internal/trigger-auto-release` - Trigger auto release
-- `POST /api/jobs/internal/trigger-dispute-escalation` - Trigger dispute escalation
-
-## Local Development
-
-1. **Install dependencies**:
+### Local Development
+1. Install dependencies:
    ```bash
    go mod download
    ```
 
-2. **Set up Firebase credentials**:
+2. Run the service:
    ```bash
-   # Place your Firebase service account key in:
-   # auth/firebase_credentials.json
+   go run main.go
    ```
 
-3. **Run locally**:
-   ```bash
-   GO_ENV=development go run main.go
-   ```
+3. Service available at: `http://localhost:8081`
 
-   The service will start on `http://localhost:8081`
+### Testing
+Run the full test suite:
+```bash
+go test ./... -v
+```
 
-## Deployment to Vercel
+Test Stripe integration:
+```bash
+go run test_stripe_integration.go
+```
 
-1. **Connect repository to Vercel**
-2. **Set environment variables** in Vercel dashboard
-3. **Deploy** - Vercel will automatically use the `vercel.json` configuration
+Debug payment issues:
+```bash
+go run debug_stripe_payments.go
+```
 
-### Important Vercel Setup Notes
+## 🔄 Payment Workflow
 
-- Firebase credentials should be provided as base64-encoded JSON in `GOOGLE_APPLICATION_CREDENTIALS`
-- The service uses the `Handler` function for serverless execution
-- Background jobs are handled differently in production (triggered via external cron or API calls)
+### 1. Payment Creation
+```bash
+POST /api/payments/games
+{
+  "userId": "player_123",
+  "gameId": "game_456",
+  "applicationId": "app_789", 
+  "organizerId": "acct_stripe_connect_id",
+  "amount": 25.0
+}
+```
 
-## Security
+**Response**: Returns payment intent with `client_secret` for frontend completion.
 
-- Firebase credentials are excluded from version control (see `.gitignore`)
-- Admin endpoints require Firebase authentication
-- Internal endpoints are unprotected (design for inter-service communication)
-- JWT tokens used for internal service authentication
+### 2. Payment Completion
+Frontend completes payment using Stripe Elements/SDK with the client secret.
 
-## Monitoring
+### 3. Escrow Management
+- Funds automatically held in escrow on organizer's Stripe Connect account
+- Released after game completion + rating period (24h default)
+- Background jobs handle automatic processing
 
-The service provides comprehensive job monitoring:
-- Individual job status tracking
-- Error counting and health metrics
-- Runtime performance tracking
-- Last run and next scheduled time tracking
+### 4. Background Processing
+- **Rating Reminders**: Every 6 hours, reminds players to rate games
+- **Auto Release**: Every hour, releases eligible escrow funds
+- **Dispute Escalation**: Every 4 hours, escalates unresolved disputes
 
-Access monitoring via `/api/jobs/status` and `/api/jobs/health` endpoints.
+## 📊 API Endpoints
 
-## Contributing
+### Payment Operations
+- `POST /api/payments/games` - Create game payment
+- `POST /api/payments/confirm` - Confirm payment completion  
+- `POST /api/payments/escrow/release` - Manually release escrow
+- `POST /api/payments/refund` - Process refund
+- `GET /api/payments/escrow/eligible` - Get eligible escrow releases
+- `GET /api/payments/test-cards` - Get test card numbers (test mode only)
 
-1. Ensure all tests pass: `go test ./...`
-2. Run linting: `go fmt ./...`
-3. Update documentation as needed
-4. Follow existing code patterns and conventions
+### Job Management
+- `GET /api/jobs/status` - Get job statuses
+- `GET /api/jobs/health` - Get job health information
+- `POST /api/jobs/trigger/:jobName` - Manually trigger job (admin)
+- `GET /api/jobs/config` - Get job configuration
+- `POST /api/jobs/config` - Update job configuration (admin)
+
+### Internal Services
+- `POST /api/jobs/internal/trigger-rating-reminder` - Trigger rating reminders
+- `POST /api/jobs/internal/trigger-auto-release` - Trigger escrow releases
+- `POST /api/jobs/internal/trigger-dispute-escalation` - Trigger dispute handling
+
+## 🗄️ Data Models
+
+### Payment
+Represents a payment transaction with fees and status tracking.
+
+### EscrowTransaction  
+Manages funds held in escrow with release conditions and timing.
+
+### Match
+Sports game/match with players, location, and completion status.
+
+### Application
+Player application to join a game with bid price and status.
+
+See [PAYMENT_WORKFLOW.md](./PAYMENT_WORKFLOW.md) for detailed business logic documentation.
+
+## 🔧 Configuration
+
+### Background Jobs
+Default intervals (configurable via API):
+- Rating Reminders: Every 6 hours
+- Auto Release: Every 1 hour  
+- Dispute Escalation: Every 4 hours
+
+### Business Rules
+- Minimum game price: €5
+- Maximum game price: €50
+- Escrow hold period: 24 hours after game completion
+- Minimum rating for auto-release: 3.0/5.0
+- Rating deadline: 7 days after game completion
+
+## 🧪 Testing
+
+### Test Cards (Stripe Test Mode)
+- **Success**: `4242424242424242`
+- **Decline**: `4000000000000002`  
+- **Insufficient Funds**: `4000000000009995`
+- **Expired**: `4000000000000069`
+
+### Testing Tools
+- `test_stripe_integration.go` - Integration testing script
+- `debug_stripe_payments.go` - Payment debugging utility
+- Comprehensive unit test suite in `*_test.go` files
+
+See [TESTING.md](./TESTING.md) for complete testing guide.
+
+## 🚀 Deployment
+
+### Vercel (Production)
+The service is designed for serverless deployment on Vercel:
+- Main handler exports `Handler(w, r)` function
+- Background jobs disabled in production (use external cron/scheduler)
+- Environment variables configured in Vercel dashboard
+
+### Local Development  
+- Full background job system runs locally
+- Gin router serves HTTP endpoints
+- Uses port 8081 by default
+
+## 🔐 Security
+
+### Payment Security
+- PCI compliance through Stripe (no card data stored)
+- Stripe Connect for secure fund transfers
+- Firebase Authentication for API access
+
+### Access Control
+- Public endpoints for payment operations
+- Admin-only endpoints for job management
+- Internal endpoints for service-to-service communication
+
+## 📈 Monitoring
+
+### Health Checks
+- `GET /` or `GET /ping` - Service health
+- `GET /api/jobs/health` - Background job health
+- Job status tracking with error counts and runtime metrics
+
+### Key Metrics
+- Payment success rates
+- Escrow release timing
+- Rating completion rates
+- Background job performance
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Run tests (`go test ./... -v`)
+4. Commit changes (`git commit -m 'Add amazing feature'`)
+5. Push to branch (`git push origin feature/amazing-feature`)
+6. Open Pull Request
+
+## 📝 License
+
+This project is proprietary software for GoalHero platform.
+
+## 📞 Support
+
+- Documentation: See `/docs` folder
+- Issues: Create GitHub issue
+- Testing: Use provided testing tools and documentation
+
+---
+
+**Built with ❤️ for the GoalHero sports community**
