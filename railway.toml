@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+healthcheckPath = "/ping"
+healthcheckTimeout = 100
+restartPolicyType = "never"
+
+[[services]]
+serviceName = "goalhero-payment-jobs"
+
+[services.variables]
+NIXPACKS_GOLANG_VERSION = "1.21"

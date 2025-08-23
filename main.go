@@ -25,10 +25,12 @@ func init() {
 	// Initialize Firebase
 	auth.InitFirebase()
 
-	// Start background job manager (will be handled differently in serverless)
-	if os.Getenv("GO_ENV") != "production" {
-		fmt.Print("⚙️ Starting background jobs in non-production environment...\n")
+	// Start background job manager (Railway supports long-running processes)
+	if os.Getenv("DISABLE_BACKGROUND_JOBS") != "true" {
+		fmt.Print("⚙️ Starting background jobs...\n")
 		jobManager = services.StartBackgroundJobs()
+	} else {
+		log.Println("⚠️ Background jobs disabled via DISABLE_BACKGROUND_JOBS environment variable")
 	}
 
 	// Setup HTTP server
@@ -76,11 +78,14 @@ func init() {
 }
 
 func main() {
-	// For local development
-	//if os.Getenv("GO_ENV") != "production" {
-	log.Println("🔧 Running in development mode on :8081")
-	router.Run(":8081")
-	//}
+	// Get port from environment variable (Railway sets PORT automatically)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8081" // Default for local development
+	}
+	
+	log.Printf("🚀 Starting GoalHero Payment Jobs Service on port %s", port)
+	router.Run(":" + port)
 }
 
 // Handler for Vercel - this is the entry point for serverless functions
