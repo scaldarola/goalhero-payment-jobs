@@ -535,8 +535,8 @@ func (s *PaymentService) sendSlackFailureNotification(escrowID string, amount fl
 	s.sendSlackMessage(message, webhookURL)
 }
 
-// sendSlackJobSummaryNotification sends a summary notification for payment job execution
-func (s *PaymentService) sendSlackJobSummaryNotification(validated, processed, failed int, totalReleased float64, runtime time.Duration) {
+// SendSlackJobSummaryNotification sends a summary notification for payment job execution
+func (s *PaymentService) SendSlackJobSummaryNotification(validated, processed, failed int, totalReleased float64, runtime time.Duration) {
 	webhookURL := os.Getenv("SLACK_ESCROW_WEBHOOK_URL")
 	if webhookURL == "" {
 		return

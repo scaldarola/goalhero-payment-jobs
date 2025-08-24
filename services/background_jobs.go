@@ -456,7 +456,7 @@ func (jm *BackgroundJobManager) runAutoRelease() {
 	}
 
 	// Send Slack notification with job summary
-	paymentService.sendSlackJobSummaryNotification(validated, processed, failed, totalReleased, time.Since(start))
+	paymentService.SendSlackJobSummaryNotification(validated, processed, failed, totalReleased, time.Since(start))
 
 	log.Printf("[AutoReleaseJob] Completed: %s (runtime: %v)", result, time.Since(start))
 }
