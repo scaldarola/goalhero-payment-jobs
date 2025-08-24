@@ -537,10 +537,15 @@ func (s *PaymentService) sendSlackFailureNotification(escrowID string, amount fl
 
 // SendSlackJobSummaryNotification sends a summary notification for payment job execution
 func (s *PaymentService) SendSlackJobSummaryNotification(validated, processed, failed int, totalReleased float64, runtime time.Duration) {
+	log.Printf("[PaymentService] Sending job summary notification: validated=%d, processed=%d, failed=%d, totalReleased=€%.2f", validated, processed, failed, totalReleased)
+	
 	webhookURL := os.Getenv("SLACK_ESCROW_WEBHOOK_URL")
 	if webhookURL == "" {
+		log.Printf("[PaymentService] SLACK_ESCROW_WEBHOOK_URL not configured, skipping job summary notification")
 		return
 	}
+	
+	log.Printf("[PaymentService] Using Slack webhook: %s...%s", webhookURL[:20], webhookURL[len(webhookURL)-10:])
 
 	var statusIcon, statusText string
 	if failed > 0 {
@@ -566,28 +571,37 @@ func (s *PaymentService) SendSlackJobSummaryNotification(validated, processed, f
 			statusIcon, statusText, validated, processed, failed, releaseText, runtime.Round(time.Second), time.Now().Format("2006-01-02 15:04:05 MST")),
 	}
 
+	log.Printf("[PaymentService] 📤 Sending job summary to Slack: %s", statusText)
 	s.sendSlackMessage(message, webhookURL)
+	log.Printf("[PaymentService] ✅ Job summary Slack notification sent successfully!")
 }
 
 // sendSlackMessage sends a message to Slack webhook
 func (s *PaymentService) sendSlackMessage(message SlackMessage, webhookURL string) {
+	log.Printf("[PaymentService] 🌐 Posting to Slack webhook...")
+	
 	jsonData, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("[PaymentService] Failed to marshal Slack message: %v", err)
+		log.Printf("[PaymentService] ❌ Failed to marshal Slack message: %v", err)
 		return
 	}
 
 	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("[PaymentService] Failed to send Slack message: %v", err)
+		log.Printf("[PaymentService] ❌ Failed to send Slack message (network error): %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[PaymentService] Slack message failed with status: %d", resp.StatusCode)
+		log.Printf("[PaymentService] ❌ Slack message failed with HTTP status: %d", resp.StatusCode)
+		// Try to read response body for more details
+		body := make([]byte, 512)
+		if n, err := resp.Body.Read(body); err == nil && n > 0 {
+			log.Printf("[PaymentService] Slack error response: %s", string(body[:n]))
+		}
 		return
 	}
 
-	log.Printf("[PaymentService] Slack notification sent for escrow processing")
+	log.Printf("[PaymentService] ✅ Slack message delivered successfully (HTTP %d)", resp.StatusCode)
 }

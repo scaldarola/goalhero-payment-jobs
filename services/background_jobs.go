@@ -438,8 +438,11 @@ func (jm *BackgroundJobManager) runAutoRelease() {
 		return
 	}
 
-	// Calculate validated count (total escrows examined)
+	// Calculate validated count (total escrows examined) 
+	// This should be the total eligible escrows found, not just processed + failed
 	validated := processed + failed
+	
+	log.Printf("[AutoReleaseJob] Job summary: validated=%d, processed=%d, failed=%d, totalReleased=€%.2f", validated, processed, failed, totalReleased)
 
 	if failed > 0 {
 		hasError = true
