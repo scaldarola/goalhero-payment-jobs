@@ -561,13 +561,13 @@ func (s *PaymentService) SendSlackJobSummaryNotification(validated, processed, f
 
 	var releaseText string
 	if totalReleased > 0 {
-		releaseText = fmt.Sprintf("\n💰 **Total Released:** €%.2f", totalReleased)
+		releaseText = fmt.Sprintf("\n💰 *Total Released:* €%.2f", totalReleased)
 	} else {
-		releaseText = "\n💰 **Money Released:** No payments released"
+		releaseText = "\n💰 *Money Released:* No payments released"
 	}
 
 	message := SlackMessage{
-		Text: fmt.Sprintf("%s *Payment Processing Job %s*\n\n📊 **Validation Summary:**\n• Payments Validated: %d\n• Successfully Processed: %d\n• Failed: %d%s\n\n⏱️ **Runtime:** %v\n📅 **Completed:** %s",
+		Text: fmt.Sprintf("%s *Payment Processing Job %s*\n\n📊 *Validation Summary:*\n```\nPayments Validated:      %d\nSuccessfully Processed:  %d\nFailed:                  %d\n```%s\n\n⏱️ *Runtime:* %v  |  📅 *Completed:* %s",
 			statusIcon, statusText, validated, processed, failed, releaseText, runtime.Round(time.Second), time.Now().Format("2006-01-02 15:04:05 MST")),
 	}
 
