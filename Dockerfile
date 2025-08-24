@@ -32,8 +32,6 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # Copy the binary
 COPY --from=builder /app/goalhero-payment-jobs /goalhero-payment-jobs
 
-# Copy Firebase credentials (if they exist)
-COPY --from=builder /app/auth/firebase_credentials.json /auth/firebase_credentials.json
 
 # Expose port
 EXPOSE 8081
