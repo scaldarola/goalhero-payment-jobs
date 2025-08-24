@@ -259,17 +259,18 @@ func (s *PaymentService) GetEligibleEscrowReleases() ([]*models.EscrowTransactio
 }
 
 // ProcessAutomaticReleases processes all eligible escrow releases automatically
-func (s *PaymentService) ProcessAutomaticReleases() (int, int, []string, error) {
+func (s *PaymentService) ProcessAutomaticReleases() (int, int, []string, float64, error) {
 	log.Printf("[PaymentService] Processing automatic escrow releases")
 
 	// Get eligible escrow transactions
 	escrows, err := s.GetEligibleEscrowReleases()
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("failed to get eligible escrow releases: %w", err)
+		return 0, 0, nil, 0, fmt.Errorf("failed to get eligible escrow releases: %w", err)
 	}
 
 	processed := 0
 	failed := 0
+	totalReleased := 0.0
 	var errors []string
 
 	for _, escrow := range escrows {
@@ -284,6 +285,7 @@ func (s *PaymentService) ProcessAutomaticReleases() (int, int, []string, error) 
 				s.sendSlackFailureNotification(escrow.ID, escrow.Amount, err.Error())
 			} else {
 				processed++
+				totalReleased += escrow.Amount
 				log.Printf("[PaymentService] Auto-released escrow: %s", escrow.ID)
 				s.sendSlackSuccessNotification(escrow.ID, escrow.Amount, "automatic_release")
 			}
@@ -298,7 +300,7 @@ func (s *PaymentService) ProcessAutomaticReleases() (int, int, []string, error) 
 
 	log.Printf("[PaymentService] Auto-release completed: %d processed, %d failed out of %d eligible",
 		processed, failed, len(escrows))
-	return processed, failed, errors, nil
+	return processed, failed, errors, totalReleased, nil
 }
 
 // isEligibleForAutoRelease checks if an escrow transaction is eligible for automatic release
@@ -528,6 +530,40 @@ func (s *PaymentService) sendSlackFailureNotification(escrowID string, amount fl
 	message := SlackMessage{
 		Text: fmt.Sprintf("❌ *Escrow Payment Processing Failed*\n\nEscrow ID: %s\nAmount: €%.2f\nError: %s\nStatus: Failed",
 			escrowID, amount, errorMsg),
+	}
+
+	s.sendSlackMessage(message, webhookURL)
+}
+
+// sendSlackJobSummaryNotification sends a summary notification for payment job execution
+func (s *PaymentService) sendSlackJobSummaryNotification(validated, processed, failed int, totalReleased float64, runtime time.Duration) {
+	webhookURL := os.Getenv("SLACK_ESCROW_WEBHOOK_URL")
+	if webhookURL == "" {
+		return
+	}
+
+	var statusIcon, statusText string
+	if failed > 0 {
+		statusIcon = "⚠️"
+		statusText = "Completed with Issues"
+	} else if processed > 0 {
+		statusIcon = "✅"
+		statusText = "Completed Successfully"
+	} else {
+		statusIcon = "ℹ️"
+		statusText = "No Payments to Process"
+	}
+
+	var releaseText string
+	if totalReleased > 0 {
+		releaseText = fmt.Sprintf("\n💰 **Total Released:** €%.2f", totalReleased)
+	} else {
+		releaseText = "\n💰 **Money Released:** No payments released"
+	}
+
+	message := SlackMessage{
+		Text: fmt.Sprintf("%s *Payment Processing Job %s*\n\n📊 **Validation Summary:**\n• Payments Validated: %d\n• Successfully Processed: %d\n• Failed: %d%s\n\n⏱️ **Runtime:** %v\n📅 **Completed:** %s",
+			statusIcon, statusText, validated, processed, failed, releaseText, runtime.Round(time.Second), time.Now().Format("2006-01-02 15:04:05 MST")),
 	}
 
 	s.sendSlackMessage(message, webhookURL)

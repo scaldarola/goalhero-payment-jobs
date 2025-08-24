@@ -429,7 +429,7 @@ func (jm *BackgroundJobManager) runAutoRelease() {
 
 	// Process automatic escrow releases
 	paymentService := NewPaymentService()
-	processed, failed, errors, err := paymentService.ProcessAutomaticReleases()
+	processed, failed, errors, totalReleased, err := paymentService.ProcessAutomaticReleases()
 	
 	if err != nil {
 		hasError = true
@@ -437,6 +437,9 @@ func (jm *BackgroundJobManager) runAutoRelease() {
 		log.Printf("[AutoReleaseJob] Failed: %s", result)
 		return
 	}
+
+	// Calculate validated count (total escrows examined)
+	validated := processed + failed
 
 	if failed > 0 {
 		hasError = true
@@ -451,6 +454,9 @@ func (jm *BackgroundJobManager) runAutoRelease() {
 	} else {
 		result = fmt.Sprintf("Successfully processed %d automatic releases", processed)
 	}
+
+	// Send Slack notification with job summary
+	paymentService.sendSlackJobSummaryNotification(validated, processed, failed, totalReleased, time.Since(start))
 
 	log.Printf("[AutoReleaseJob] Completed: %s (runtime: %v)", result, time.Since(start))
 }

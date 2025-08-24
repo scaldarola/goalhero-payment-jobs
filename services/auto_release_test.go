@@ -103,7 +103,7 @@ func TestProcessAutomaticReleases(t *testing.T) {
 		// This test runs when Firestore client is not available
 		paymentService := NewPaymentService()
 		
-		processed, failed, errors, err := paymentService.ProcessAutomaticReleases()
+		processed, failed, errors, totalReleased, err := paymentService.ProcessAutomaticReleases()
 		
 		// Should handle gracefully when no Firestore client
 		if err != nil {
@@ -111,6 +111,7 @@ func TestProcessAutomaticReleases(t *testing.T) {
 			assert.Equal(t, 0, processed)
 			assert.Equal(t, 0, failed)
 			assert.Empty(t, errors)
+			assert.Equal(t, 0.0, totalReleased)
 		}
 	})
 }
