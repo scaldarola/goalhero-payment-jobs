@@ -347,6 +347,10 @@ func (jm *BackgroundJobManager) runRatingReminder() {
 	if firestoreClient == nil {
 		log.Printf("[RatingReminderJob] Firestore client not available (test environment?)")
 		result = "Skipped - no Firestore client available"
+		
+		// Send Slack notification even when skipped
+		paymentService := NewPaymentService()
+		paymentService.SendSlackRatingJobNotification(0, 0, 0, time.Since(start))
 		return
 	}
 
@@ -364,12 +368,15 @@ func (jm *BackgroundJobManager) runRatingReminder() {
 	iter := query.Documents(ctx)
 	remindersSent := 0
 	errors := 0
+	matchesChecked := 0
 
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
 			break
 		}
+		matchesChecked++
+		
 		if err != nil {
 			log.Printf("[RatingReminderJob] Error iterating matches: %v", err)
 			errors++
@@ -392,12 +399,18 @@ func (jm *BackgroundJobManager) runRatingReminder() {
 		}
 	}
 
+	log.Printf("[RatingReminderJob] Job summary: matchesChecked=%d, remindersSent=%d, errors=%d", matchesChecked, remindersSent, errors)
+
 	if errors > 0 {
 		hasError = true
 		result = fmt.Sprintf("Sent %d reminders with %d errors", remindersSent, errors)
 	} else {
 		result = fmt.Sprintf("Successfully sent %d rating reminders", remindersSent)
 	}
+
+	// Send Slack notification with job summary
+	paymentService := NewPaymentService()
+	paymentService.SendSlackRatingJobNotification(matchesChecked, remindersSent, errors, time.Since(start))
 
 	log.Printf("[RatingReminderJob] Completed: %s (runtime: %v)", result, time.Since(start))
 }
@@ -486,12 +499,27 @@ func (jm *BackgroundJobManager) runDisputeEscalation() {
 	if firestoreClient == nil {
 		log.Printf("[DisputeEscalationJob] Firestore client not available (test environment?)")
 		result = "Skipped - no Firestore client available"
+		
+		// Send Slack notification even when skipped
+		paymentService := NewPaymentService()
+		paymentService.SendSlackDisputeJobNotification(0, 0, 0, time.Since(start))
 		return
 	}
 
 	// TODO: Implement dispute escalation logic
-	// For now, simulate the result
+	// For now, simulate the result with placeholder values
+	disputesChecked := 0
+	escalated := 0
+	errors := 0
+	
+	log.Printf("[DisputeEscalationJob] Job summary: disputesChecked=%d, escalated=%d, errors=%d", disputesChecked, escalated, errors)
+	
 	result = "Dispute escalation job completed (implementation needed)"
+	
+	// Send Slack notification with job summary
+	paymentService := NewPaymentService()
+	paymentService.SendSlackDisputeJobNotification(disputesChecked, escalated, errors, time.Since(start))
+	
 	log.Printf("[DisputeEscalationJob] Completed: %s (runtime: %v)", result, time.Since(start))
 }
 

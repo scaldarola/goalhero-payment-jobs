@@ -535,6 +535,74 @@ func (s *PaymentService) sendSlackFailureNotification(escrowID string, amount fl
 	s.sendSlackMessage(message, webhookURL)
 }
 
+// SendSlackRatingJobNotification sends a summary notification for rating reminder job execution
+func (s *PaymentService) SendSlackRatingJobNotification(matchesChecked, remindersSent, errors int, runtime time.Duration) {
+	log.Printf("[PaymentService] Sending rating job notification: matchesChecked=%d, remindersSent=%d, errors=%d", matchesChecked, remindersSent, errors)
+	
+	webhookURL := os.Getenv("SLACK_ESCROW_WEBHOOK_URL")
+	if webhookURL == "" {
+		log.Printf("[PaymentService] SLACK_ESCROW_WEBHOOK_URL not configured, skipping rating job notification")
+		return
+	}
+	
+	log.Printf("[PaymentService] Using Slack webhook for rating job: %s...%s", webhookURL[:20], webhookURL[len(webhookURL)-10:])
+
+	var statusIcon, statusText string
+	if errors > 0 {
+		statusIcon = "⚠️"
+		statusText = "Completed with Issues"
+	} else if remindersSent > 0 {
+		statusIcon = "✅"
+		statusText = "Completed Successfully"
+	} else {
+		statusIcon = "ℹ️"
+		statusText = "No Reminders to Send"
+	}
+
+	message := SlackMessage{
+		Text: fmt.Sprintf("%s *Rating Reminder Job %s*\n\n📝 *Reminder Summary:*\n```\nMatches Checked:         %d\nReminders Sent:          %d\nErrors:                  %d\n```\n\n⏱️ *Runtime:* %v  |  📅 *Completed:* %s",
+			statusIcon, statusText, matchesChecked, remindersSent, errors, runtime.Round(time.Second), time.Now().Format("2006-01-02 15:04:05 MST")),
+	}
+
+	log.Printf("[PaymentService] 📤 Sending rating job summary to Slack: %s", statusText)
+	s.sendSlackMessage(message, webhookURL)
+	log.Printf("[PaymentService] ✅ Rating job Slack notification sent successfully!")
+}
+
+// SendSlackDisputeJobNotification sends a summary notification for dispute escalation job execution
+func (s *PaymentService) SendSlackDisputeJobNotification(disputesChecked, escalated, errors int, runtime time.Duration) {
+	log.Printf("[PaymentService] Sending dispute job notification: disputesChecked=%d, escalated=%d, errors=%d", disputesChecked, escalated, errors)
+	
+	webhookURL := os.Getenv("SLACK_ESCROW_WEBHOOK_URL")
+	if webhookURL == "" {
+		log.Printf("[PaymentService] SLACK_ESCROW_WEBHOOK_URL not configured, skipping dispute job notification")
+		return
+	}
+	
+	log.Printf("[PaymentService] Using Slack webhook for dispute job: %s...%s", webhookURL[:20], webhookURL[len(webhookURL)-10:])
+
+	var statusIcon, statusText string
+	if errors > 0 {
+		statusIcon = "⚠️"
+		statusText = "Completed with Issues"
+	} else if escalated > 0 {
+		statusIcon = "✅"
+		statusText = "Completed Successfully"
+	} else {
+		statusIcon = "ℹ️"
+		statusText = "No Disputes to Escalate"
+	}
+
+	message := SlackMessage{
+		Text: fmt.Sprintf("%s *Dispute Escalation Job %s*\n\n⚖️ *Dispute Summary:*\n```\nDisputes Checked:        %d\nEscalated:               %d\nErrors:                  %d\n```\n\n⏱️ *Runtime:* %v  |  📅 *Completed:* %s",
+			statusIcon, statusText, disputesChecked, escalated, errors, runtime.Round(time.Second), time.Now().Format("2006-01-02 15:04:05 MST")),
+	}
+
+	log.Printf("[PaymentService] 📤 Sending dispute job summary to Slack: %s", statusText)
+	s.sendSlackMessage(message, webhookURL)
+	log.Printf("[PaymentService] ✅ Dispute job Slack notification sent successfully!")
+}
+
 // SendSlackJobSummaryNotification sends a summary notification for payment job execution
 func (s *PaymentService) SendSlackJobSummaryNotification(validated, processed, failed int, totalReleased float64, runtime time.Duration) {
 	log.Printf("[PaymentService] Sending job summary notification: validated=%d, processed=%d, failed=%d, totalReleased=€%.2f", validated, processed, failed, totalReleased)
